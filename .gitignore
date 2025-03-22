@@ -1,0 +1,23 @@
+# See https://help.github.com/articles/ignoring-files/ for more about ignoring files.
+
+# 환경 변수 파일 (보안 정보)
+.env
+
+# Python 캐시 파일
+__pycache__/
+*.pyc
+*.pyo
+
+# 로그 파일 제외
+*.log
+
+# 데이터 폴더 (직접 관리)
+data/
+data.zip
+
+# 가상환경 (용량 문제로 제외)
+venv/
+
+# Windows 관련 불필요한 파일
+Thumbs.db
+Desktop.ini
