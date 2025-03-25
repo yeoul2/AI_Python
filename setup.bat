@@ -16,5 +16,5 @@ pip install -r requirements.txt
 echo ✅ 프로젝트 설정 완료!
 echo ------------------------------------------
 echo ▶ FastAPI 서버 실행 명령어:
-echo uvicorn main:app --reload --port=9009
+echo uvicorn main:app --reload --port=5005
 pause
