@@ -81,27 +81,32 @@ def generate_travel_plan(city_or_country, days, people, style=None):
         )
 
         content = response.choices[0].message.content.strip()
-        print("📦 GPT 응답 내용 확인:\n", content)  # ✅ GPT 응답 직접 출력
         parsed = json.loads(content)
 
         # 🔧 좌표 누락된 경우 Google Maps로 보완
         for day in parsed:
             if "activities" in day:
                 for activity in day["activities"]:
-                    # 📍 강제로 Google Maps 좌표 보완 실행
-                    place_name = f"{city_or_country} {activity.get('to') or activity.get('title')}"
-                    lat, lng = get_coordinates(place_name)
-                    print(f"[좌표 보완] {place_name} → lat: {lat}, lng: {lng}")
-                    try:
-                        activity["latitude"] = float(lat)
-                        activity["longitude"] = float(lng)
-                    except:
+                    lat = activity.get("latitude")
+                    lng = activity.get("longitude")
+
+                    # ★ 좌표가 없으면 place_name을 기준으로 보완 시도
+                    if not lat or not lng:
+                        place_name = f"{city_or_country} {activity.get('to') or activity.get('title')}"
+                        lat, lng = get_coordinates(place_name)
+                        print(f"[좌표 보완] {place_name} → lat: {lat}, lng: {lng}")
+                        activity["latitude"] = lat
+                        activity["longitude"] = lng
+
+                    # ★ 여전히 없다면 기본 좌표 강제 삽입
+                    if activity["latitude"] is None or activity["longitude"] is None:
                         print(f"[⚠️ 강제 좌표 삽입] {activity.get('title')}")
                         activity["latitude"] = 48.8566
                         activity["longitude"] = 2.3522
 
+                    # ★ 좌표 확인 로그
                     print(
-                        f"📍 마커 위치 확인: {activity.get('title')} → lat: {activity['latitude']}, lng: {activity['longitude']}"
+                        f"📍 마커 위치 확인: {activity['title']} → lat: {activity['latitude']}, lng: {activity['longitude']}"
                     )
 
         return parsed  # ✅ 중첩 없이 단일 JSON 배열 반환

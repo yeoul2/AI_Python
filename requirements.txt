@@ -3,3 +3,4 @@ uvicorn
 openai
 python-dotenv
 pydantic
+googlemaps==4.10.0
