@@ -22,7 +22,6 @@ def generate_schedule(request: ScheduleRequest):
         request.city, request.days, request.people, request.style
     )
     return result  # ✅ 여기 수정
-    # return {"schedule": result} ❌ 이렇게 중첩되면 안됨
 
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=5005, reload=True)

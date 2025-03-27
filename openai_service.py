@@ -22,28 +22,61 @@ def get_coordinates(place_name):
             return location["lat"], location["lng"]
     except Exception as e:
         print(f"[좌표 변환 오류] {place_name}: {e}")
-
-    print(f"[⚠️ 기본 좌표 사용] {place_name}")
-    return 48.8566, 2.3522  # 파리 중심 좌표 기본값
-    """ return None, None """
+    return None, None
 
 
-# ✨ 핵심 여행 일정 생성 함수
+# 🧭 이동 시간 및 수단 보완 함수 (Google Directions API)
+def get_duration_and_mode(from_coord, to_coord):
+    try:
+        directions = gmaps.directions(
+            origin=from_coord, destination=to_coord, mode="transit", language="ko"
+        )
+        if directions:
+            leg = directions[0]["legs"][0]
+            duration = leg["duration"]["text"]
+            steps = leg["steps"]
+            mode = steps[0]["travel_mode"].lower()
+            if mode == "walking":
+                return duration, "도보"
+            elif mode == "driving":
+                return duration, "자차"
+            elif mode == "transit":
+                vehicle = (
+                    steps[0]
+                    .get("transit_details", {})
+                    .get("line", {})
+                    .get("vehicle", {})
+                    .get("type", "")
+                    .lower()
+                )
+                if "bus" in vehicle:
+                    return duration, "버스"
+                elif "subway" in vehicle or "metro" in vehicle:
+                    return duration, "지하철"
+                else:
+                    return duration, "대중교통"
+        return "이동 시간 없음", "도보"
+    except Exception as e:
+        print(f"[⛔ 이동 정보 실패] {from_coord} → {to_coord}: {e}")
+        return "이동 시간 없음", "도보"
+
+
+# ✨ 여행 일정 생성 함수
 def generate_travel_plan(city_or_country, days, people, style=None):
     if style:
         prompt = f"{people}명이 {days}일 동안 {city_or_country}로 여행을 갈 예정이야.\n여행 테마는 {style}야."
     else:
         prompt = f"{people}명이 {days}일 동안 {city_or_country}로 여행을 갈 예정이야.\n테마는 네가 추천해줘."
 
-    prompt += f"""
-    
+    prompt += """
+
 아래 형식처럼 'activities' 배열을 포함한 JSON 형태로 결과를 반환해줘:
 
 [
-  {{
+  {
     "day": "DAY 1",
     "activities": [
-      {{
+      {
         "time": "09:00",
         "title": "경복궁",
         "desc": "조선시대 궁궐 방문",
@@ -53,21 +86,18 @@ def generate_travel_plan(city_or_country, days, people, style=None):
         "duration": "20분",
         "latitude": 37.5796,
         "longitude": 126.9770
-      }},
-      ...
+      }
     ]
-  }},
-  ...
+  }
 ]
 
 ⚠️ 조건:
-- 반드시 'activities' 배열을 포함할 것 (절대 null 또는 빠지면 안 됨)
-- 각 활동에는 반드시 위도(latitude)와 경도(longitude)를 포함할 것
-- 위치가 명확하지 않으면 구글맵 기준 대표 좌표를 임의로 삽입해도 괜찮음
-- 하루에 약 4~6개의 activity를 포함할 것
-- 'from', 'to', 'duration', 'latitude', 'longitude'는 반드시 포함
-- 출력은 JSON 외 텍스트 없이 순수 JSON만 출력
-- 모든 출력 내용(title, desc 등)은 반드시 한국어로 작성해줘
+- 'activities' 배열은 필수
+- 각 항목에 time, title, desc, from, to, moveType, duration, latitude, longitude 포함
+- 위치 불명확하면 대표 장소 좌표 임의 삽입
+- 하루 4~6개 activity
+- 출력은 순수 JSON만
+- 모든 텍스트는 반드시 한국어
 """
 
     try:
@@ -81,30 +111,31 @@ def generate_travel_plan(city_or_country, days, people, style=None):
         )
 
         content = response.choices[0].message.content.strip()
-        print("📦 GPT 응답 내용 확인:\n", content)  # ✅ GPT 응답 직접 출력
         parsed = json.loads(content)
 
-        # 🔧 좌표 누락된 경우 Google Maps로 보완
+        # 🔧 좌표 및 이동 정보 보완
         for day in parsed:
             if "activities" in day:
-                for activity in day["activities"]:
-                    # 📍 강제로 Google Maps 좌표 보완 실행
+                activities = day["activities"]
+                for i, activity in enumerate(activities):
                     place_name = f"{city_or_country} {activity.get('to') or activity.get('title')}"
                     lat, lng = get_coordinates(place_name)
-                    print(f"[좌표 보완] {place_name} → lat: {lat}, lng: {lng}")
-                    try:
-                        activity["latitude"] = float(lat)
-                        activity["longitude"] = float(lng)
-                    except:
-                        print(f"[⚠️ 강제 좌표 삽입] {activity.get('title')}")
-                        activity["latitude"] = 48.8566
-                        activity["longitude"] = 2.3522
+                    activity["latitude"] = lat
+                    activity["longitude"] = lng
 
-                    print(
-                        f"📍 마커 위치 확인: {activity.get('title')} → lat: {activity['latitude']}, lng: {activity['longitude']}"
-                    )
+                    if i > 0:
+                        prev = activities[i - 1]
+                        if prev["latitude"] and prev["longitude"] and lat and lng:
+                            duration, move_type = get_duration_and_mode(
+                                (prev["latitude"], prev["longitude"]), (lat, lng)
+                            )
+                            activity["duration"] = duration
+                            activity["moveType"] = move_type
+                        else:
+                            activity["duration"] = "이동 시간 없음"
+                            activity["moveType"] = "도보"
 
-        return parsed  # ✅ 중첩 없이 단일 JSON 배열 반환
+        return parsed
 
     except Exception as e:
-        return {"error": f"❌ GPT 오류 발생: {str(e)}"}
+        return {"error": f"❌ GPT 오류: {str(e)}"}
