@@ -7,4 +7,4 @@ class ScheduleRequest(BaseModel):
     city: str
     days: int
     people: int
-    style: str = ""
+    style: Optional[str] = None  # ✅ 이렇게 고쳐야 null 허용됨
